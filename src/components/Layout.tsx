@@ -1,40 +1,32 @@
 import { Outlet, Link, useLocation } from "react-router-dom"
-import { Home, Search, MessageCircle, User, Plus, Image as ImageIcon, Moon, Sun, Palette, Users, Trophy, BookOpen, Info, Bell, Calendar, UserPlus } from "lucide-react"
+import { Home, Search, MessageCircle, User, Plus, Image as ImageIcon, Moon, Sun, Palette, Users, Trophy, BookOpen, Info, Bell, UserPlus, Heart } from "lucide-react"
 import { cn } from "../lib/utils"
-import { useState, useEffect } from "react"
+import React, { useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog"
 import { Input } from "./ui/input"
 import { Button } from "./ui/button"
-import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip"
 import { useTheme } from "./theme-provider"
-import { api } from "../services/api"
+import { useNotifications, type NotificationItem } from "../lib/api"
 import { motion, AnimatePresence } from "motion/react"
+import { useChatSocketGlobal } from "../lib/ws"
 
 export function Layout() {
   const location = useLocation()
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const { theme, setTheme } = useTheme()
-  const [notifications, setNotifications] = useState<any[]>([])
+  // Install the global chat WebSocket listeners so every screen receives
+  // live message/typing events straight into the TanStack Query cache.
+  useChatSocketGlobal()
 
-  useEffect(() => {
-    const loadNotifications = async () => {
-      try {
-        const data = await api.getHomeData()
-        setNotifications(data.notifications || [])
-      } catch (error) {
-        console.error("Failed to load notifications", error)
-      }
-    }
-    loadNotifications()
-    const intervalId = setInterval(loadNotifications, 10000)
-    return () => clearInterval(intervalId)
-  }, [])
+  const { data: notifPage } = useNotifications({ limit: 20, unreadOnly: true })
+  const notifications: NotificationItem[] = notifPage?.items ?? []
 
   const desktopNavItems = [
-    { icon: Home, label: "Home", path: "/" },
+    { icon: Home, label: "Home", path: "/", exact: true },
     { icon: Search, label: "Discover", path: "/discover" },
+    { icon: Heart, label: "Friends", path: "/friends" },
     { icon: Users, label: "Communities", path: "/communities" },
     { icon: Trophy, label: "Challenges", path: "/challenges" },
     { icon: BookOpen, label: "Experts", path: "/experts" },
@@ -44,9 +36,9 @@ export function Layout() {
   ]
 
   const mobileNavItems = [
-    { icon: Home, label: "Home", path: "/" },
+    { icon: Home, label: "Home", path: "/", exact: true },
     { icon: Search, label: "Discover", path: "/discover" },
-    { icon: Users, label: "Communities", path: "/communities" },
+    { icon: MessageCircle, label: "Chats", path: "/chats" },
     { icon: User, label: "Profile", path: "/profile" },
   ]
 
@@ -60,9 +52,9 @@ export function Layout() {
     <TooltipProvider>
       <div className="flex h-screen w-full bg-bg-base overflow-hidden text-text-base relative">
         {/* Desktop/Tablet Sidebar */}
-      <aside className="hidden md:flex flex-col w-64 lg:w-72 border-r border-border-base/50 bg-bg-surface/50 p-6 backdrop-blur-xl z-40">
-        <div className="mb-8 px-2 flex justify-between items-center">
-          <h1 className="text-xl font-bold tracking-tight">Active<span className="text-accent">Buddies</span></h1>
+      <aside className="hidden md:flex flex-col w-16 lg:w-72 border-r border-border-base/50 bg-bg-surface/50 p-3 lg:p-6 backdrop-blur-xl z-40">
+        <div className="mb-8 px-0 lg:px-2 flex flex-col lg:flex-row justify-between items-center gap-2">
+          <h1 className="text-xl font-bold tracking-tight hidden lg:block">Active<span className="text-accent">Buddies</span></h1>
           <div className="flex items-center gap-2">
             <Dialog>
               <DialogTrigger asChild>
@@ -84,32 +76,33 @@ export function Layout() {
                     notifications.map(notif => (
                       <div key={notif.id} className="p-4 rounded-2xl border border-border-base bg-bg-surface flex gap-3">
                         <div className="shrink-0 mt-0.5">
-                          {notif.type === "friend_request" && notif.userImage && (
-                            <Avatar className="w-10 h-10 border border-border-base/50">
-                              <AvatarImage src={notif.userImage} />
-                              <AvatarFallback>U</AvatarFallback>
-                            </Avatar>
+                          {notif.type === "FRIEND_REQUEST" && (
+                            <div className="w-10 h-10 rounded-full bg-accent/10 text-accent flex items-center justify-center">
+                              <UserPlus className="w-5 h-5" />
+                            </div>
                           )}
-                          {notif.type === "challenge" && (
+                          {(notif.type === "CHALLENGE_INVITE" || notif.type === "CHALLENGE_COMPLETE") && (
                             <div className="w-10 h-10 rounded-full bg-accent/10 text-accent flex items-center justify-center">
                               <Trophy className="w-5 h-5" />
                             </div>
                           )}
-                          {notif.type === "meetup" && (
+                          {notif.type === "MESSAGE" && (
+                            <div className="w-10 h-10 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center">
+                              <MessageCircle className="w-5 h-5" />
+                            </div>
+                          )}
+                          {(notif.type === "COMMUNITY_INVITE" || notif.type === "FRIEND_ACCEPTED" || notif.type === "SYSTEM") && (
                             <div className="w-10 h-10 rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center">
-                              <Calendar className="w-5 h-5" />
+                              <Bell className="w-5 h-5" />
                             </div>
                           )}
                         </div>
                         <div className="flex-1">
-                          <p className="text-sm font-medium mb-0.5 text-text-base leading-tight">{notif.message}</p>
-                          <p className="text-[11px] font-medium text-text-muted">{notif.time}</p>
-                          {notif.type === "friend_request" && (
-                            <div className="flex gap-2 mt-3">
-                              <Button size="sm" className="flex-1 rounded-full text-xs font-semibold h-8 bg-accent text-accent-fg hover:bg-accent/90">Accept</Button>
-                              <Button size="sm" variant="outline" className="flex-1 rounded-full text-xs font-medium h-8 border-border-base/50">Decline</Button>
-                            </div>
-                          )}
+                          <p className="text-xs font-semibold text-text-base mb-0.5">{notif.title}</p>
+                          <p className="text-sm text-text-base leading-tight">{notif.message}</p>
+                          <p className="text-[11px] font-medium text-text-muted mt-1">
+                            {new Date(notif.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                          </p>
                         </div>
                       </div>
                     ))
@@ -125,32 +118,39 @@ export function Layout() {
             </button>
           </div>
         </div>
-        <nav className="flex-1 space-y-2">
-          {desktopNavItems.map(item => (
-            <Tooltip key={item.path} delayDuration={300}>
-              <TooltipTrigger asChild>
-                <Link 
-                  to={item.path} 
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-3 rounded-2xl transition-colors font-medium text-sm", 
-                    location.pathname === item.path ? "bg-bg-surface-hover text-text-base" : "text-text-muted hover:text-text-base hover:bg-bg-surface-hover/50"
-                  )}
-                >
-                  <item.icon className="w-5 h-5" />
-                  <span className="md:inline hidden lg:inline">{item.label}</span>
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent side="right" sideOffset={16} className="hidden md:block lg:hidden">
-                {item.label}
-              </TooltipContent>
-            </Tooltip>
-          ))}
+        <nav className="flex-1 flex flex-col gap-1.5 overflow-y-auto">
+          {desktopNavItems.map(item => {
+            const isActive = (item as any).exact
+              ? location.pathname === item.path
+              : location.pathname === item.path || location.pathname.startsWith(item.path + "/")
+            return (
+              <React.Fragment key={item.path}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link 
+                      to={item.path} 
+                      className={cn(
+                        "w-full flex items-center justify-center lg:justify-start gap-3 px-3 lg:px-4 py-2.5 rounded-2xl transition-colors font-medium text-sm", 
+                        isActive ? "bg-bg-surface-hover text-text-base" : "text-text-muted hover:text-text-base hover:bg-bg-surface-hover/50"
+                      )}
+                    >
+                      <item.icon className="w-5 h-5 shrink-0" />
+                      <span className="hidden lg:inline">{item.label}</span>
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" sideOffset={16} className="lg:hidden">
+                    {item.label}
+                  </TooltipContent>
+                </Tooltip>
+              </React.Fragment>
+            )
+          })}
         </nav>
         
         <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
           <DialogTrigger asChild>
             <Button className="w-full rounded-full h-12 gap-2 mt-4 shadow-sm font-medium">
-              <Plus className="w-5 h-5" /> Create
+              <Plus className="w-5 h-5" /> <span className="hidden lg:inline">Create</span>
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-md">
@@ -249,32 +249,33 @@ export function Layout() {
                     notifications.map(notif => (
                       <div key={notif.id} className="p-4 rounded-2xl border border-border-base bg-bg-surface flex gap-3">
                         <div className="shrink-0 mt-0.5">
-                          {notif.type === "friend_request" && notif.userImage && (
-                            <Avatar className="w-10 h-10 border border-border-base/50">
-                              <AvatarImage src={notif.userImage} />
-                              <AvatarFallback>U</AvatarFallback>
-                            </Avatar>
+                          {notif.type === "FRIEND_REQUEST" && (
+                            <div className="w-10 h-10 rounded-full bg-accent/10 text-accent flex items-center justify-center">
+                              <UserPlus className="w-5 h-5" />
+                            </div>
                           )}
-                          {notif.type === "challenge" && (
+                          {(notif.type === "CHALLENGE_INVITE" || notif.type === "CHALLENGE_COMPLETE") && (
                             <div className="w-10 h-10 rounded-full bg-accent/10 text-accent flex items-center justify-center">
                               <Trophy className="w-5 h-5" />
                             </div>
                           )}
-                          {notif.type === "meetup" && (
+                          {notif.type === "MESSAGE" && (
+                            <div className="w-10 h-10 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center">
+                              <MessageCircle className="w-5 h-5" />
+                            </div>
+                          )}
+                          {(notif.type === "COMMUNITY_INVITE" || notif.type === "FRIEND_ACCEPTED" || notif.type === "SYSTEM") && (
                             <div className="w-10 h-10 rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center">
-                              <Calendar className="w-5 h-5" />
+                              <Bell className="w-5 h-5" />
                             </div>
                           )}
                         </div>
                         <div className="flex-1">
-                          <p className="text-sm font-medium mb-0.5 text-text-base leading-tight">{notif.message}</p>
-                          <p className="text-[11px] font-medium text-text-muted">{notif.time}</p>
-                          {notif.type === "friend_request" && (
-                            <div className="flex gap-2 mt-3">
-                              <Button size="sm" className="flex-1 rounded-full text-xs font-semibold h-8 bg-accent text-accent-fg hover:bg-accent/90">Accept</Button>
-                              <Button size="sm" variant="outline" className="flex-1 rounded-full text-xs font-medium h-8 border-border-base/50">Decline</Button>
-                            </div>
-                          )}
+                          <p className="text-xs font-semibold text-text-base mb-0.5">{notif.title}</p>
+                          <p className="text-sm text-text-base leading-tight">{notif.message}</p>
+                          <p className="text-[11px] font-medium text-text-muted mt-1">
+                            {new Date(notif.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                          </p>
                         </div>
                       </div>
                     ))
@@ -313,24 +314,31 @@ export function Layout() {
       {/* Mobile Bottom Nav */}
       <div className="md:hidden fixed bottom-0 w-full bg-gradient-to-t from-bg-base via-bg-base to-transparent pt-10 pb-4 px-6 z-50">
         <nav className="bg-bg-surface/80 backdrop-blur-xl border border-border-base/40 rounded-full px-5 py-2.5 flex justify-between items-center shadow-sm">
-          {mobileNavItems.slice(0, 2).map((item) => (
-            <Tooltip key={item.path} delayDuration={300}>
-              <TooltipTrigger asChild>
-                <Link
-                  to={item.path}
-                  className={cn(
-                    "flex flex-col items-center gap-1 transition-colors",
-                    location.pathname === item.path ? "text-text-base" : "text-text-muted hover:text-text-base"
-                  )}
-                >
-                  <item.icon className="w-5 h-5" />
-                </Link>
-             </TooltipTrigger>
-             <TooltipContent side="top" sideOffset={16}>
-               {item.label}
-             </TooltipContent>
-            </Tooltip>
-          ))}
+          {mobileNavItems.slice(0, 2).map((item) => {
+            const isActive = (item as any).exact
+              ? location.pathname === item.path
+              : location.pathname === item.path || location.pathname.startsWith(item.path + "/")
+            return (
+              <React.Fragment key={item.path}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link
+                      to={item.path}
+                      className={cn(
+                        "flex flex-col items-center gap-1 transition-colors",
+                        isActive ? "text-text-base" : "text-text-muted hover:text-text-base"
+                      )}
+                    >
+                      <item.icon className="w-5 h-5" />
+                    </Link>
+                 </TooltipTrigger>
+                 <TooltipContent side="top" sideOffset={16}>
+                   {item.label}
+                 </TooltipContent>
+                </Tooltip>
+              </React.Fragment>
+            )
+          })}
 
           <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
             <DialogTrigger asChild>
@@ -406,24 +414,31 @@ export function Layout() {
             </DialogContent>
           </Dialog>
 
-          {mobileNavItems.slice(2, 4).map((item) => (
-            <Tooltip key={item.path} delayDuration={300}>
-              <TooltipTrigger asChild>
-                <Link
-                  to={item.path}
-                  className={cn(
-                    "flex flex-col items-center gap-1 transition-colors",
-                    location.pathname === item.path ? "text-text-base" : "text-text-muted hover:text-text-base"
-                  )}
-                >
-                  <item.icon className="w-5 h-5" />
-                </Link>
-             </TooltipTrigger>
-             <TooltipContent side="top" sideOffset={16}>
-               {item.label}
-             </TooltipContent>
-            </Tooltip>
-          ))}
+          {mobileNavItems.slice(2, 4).map((item) => {
+            const isActive = (item as any).exact
+              ? location.pathname === item.path
+              : location.pathname === item.path || location.pathname.startsWith(item.path + "/")
+            return (
+              <React.Fragment key={item.path}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link
+                      to={item.path}
+                      className={cn(
+                        "flex flex-col items-center gap-1 transition-colors",
+                        isActive ? "text-text-base" : "text-text-muted hover:text-text-base"
+                      )}
+                    >
+                      <item.icon className="w-5 h-5" />
+                    </Link>
+                 </TooltipTrigger>
+                 <TooltipContent side="top" sideOffset={16}>
+                   {item.label}
+                 </TooltipContent>
+                </Tooltip>
+              </React.Fragment>
+            )
+          })}
         </nav>
       </div>
     </div>

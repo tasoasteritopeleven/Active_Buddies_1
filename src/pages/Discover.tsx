@@ -1,108 +1,112 @@
-import { useState, useEffect } from "react"
+import { useMemo, useState } from "react"
 import { Search as SearchIcon, SearchX, SlidersHorizontal, MapPin, Clock, Target, UserPlus, Check, ShieldCheck, Loader2, Users } from "lucide-react"
 import { Input } from "../components/ui/input"
 import { Button } from "../components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog"
 import { Link } from "react-router-dom"
-import { api } from "../services/api"
+import { useMatchSuggestions, useSendConnectionRequest, type MatchSuggestion } from "../lib/api"
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs"
 import { Star } from "lucide-react"
 
+/**
+ * Flattened shape used by the UI. The backend returns `MatchSuggestion` —
+ * we adapt it here so the rest of the render code doesn't need to know about
+ * nullable fields or the firstName/lastName split.
+ */
+interface PalView {
+  id: string
+  name: string
+  image: string
+  isPro: boolean
+  matchScore: number
+  goals: string
+  schedule: string
+  location: string
+  fitnessLevel: string | null
+  sharedGoals: string[]
+}
+
+function toPalView(s: MatchSuggestion): PalView {
+  const name =
+    [s.firstName, s.lastName].filter(Boolean).join(" ").trim() ||
+    s.email.split("@")[0]
+  return {
+    id: s.userId,
+    name,
+    image: s.avatarUrl ?? `https://i.pravatar.cc/150?u=${s.userId}`,
+    isPro: false,
+    matchScore: s.matchScore,
+    goals: s.goals.length > 0 ? s.goals.join(", ") : "Not set",
+    // Presence + schedule are not in the backend yet — placeholders for now.
+    schedule: s.fitnessLevel ?? "Flexible",
+    location: s.locationCity ?? "—",
+    fitnessLevel: s.fitnessLevel,
+    sharedGoals: s.sharedGoals,
+  }
+}
+
 export function Discover() {
   const [searchQuery, setSearchQuery] = useState("")
-  const [activityFilter, setActivityFilter] = useState("All")
-  const [distanceFilter, setDistanceFilter] = useState("Any")
-  const [accountabilityFilter, setAccountabilityFilter] = useState("Any")
   const [sortOption, setSortOption] = useState("Best Match")
-  const [requested, setRequested] = useState<number[]>([])
-  
-  const [isLoading, setIsLoading] = useState(true)
-  const [allPals, setAllPals] = useState<any[]>([])
 
-  // Mock current user profile for matching
-  const currentUser = {
-    activity: "Running",
-    schedule: "Mornings",
-    style: "Strict",
-    goals: "Marathon training"
-  }
+  const { data, isLoading, error } = useMatchSuggestions(50, 0)
+  const connect = useSendConnectionRequest()
+  // Local optimistic map: userId -> has-been-requested (until query refetch).
+  const [requested, setRequested] = useState<Set<string>>(new Set())
 
-  useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true)
-      try {
-        const pals = await api.getDiscoverPals()
-        
-        // Calculate match scores
-        const palsWithScores = pals.map(pal => {
-          let score = 50; // Base score
-          if (pal.activity === currentUser.activity) score += 20;
-          if (pal.schedule === currentUser.schedule) score += 15;
-          if (pal.style === currentUser.style) score += 10;
-          if (pal.distance <= 3) score += 5;
-          if (pal.goals.toLowerCase().includes("marathon") && currentUser.goals.toLowerCase().includes("marathon")) score += 10;
-          
-          return { ...pal, matchScore: Math.min(score, 100) };
-        })
-        
-        setAllPals(palsWithScores)
-      } catch (error) {
-        console.error("Failed to load discover pals", error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    loadData()
-  }, [])
+  const pals = useMemo<PalView[]>(() => (data ?? []).map(toPalView), [data])
 
-  // Simulate real-time status updates
-  useEffect(() => {
-    if (allPals.length === 0) return;
-    const interval = setInterval(() => {
-      setAllPals(currentPals => currentPals.map(pal => {
-        if (Math.random() > 0.8) { // 20% chance to toggle status
-          return { ...pal, online: !pal.online, lastActive: pal.online ? "Just now" : "Now" }
-        }
-        return pal
-      }))
-    }, 5000)
-    return () => clearInterval(interval)
-  }, [allPals.length])
+  const filteredPals = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    const out = q
+      ? pals.filter(
+          (p) => p.name.toLowerCase().includes(q) || p.goals.toLowerCase().includes(q),
+        )
+      : pals
+    return [...out].sort((a, b) => {
+      if (sortOption === "Same Goals") return b.sharedGoals.length - a.sharedGoals.length
+      // Nearby / Same Schedule have no backend equivalents yet — fall back to match score.
+      return b.matchScore - a.matchScore
+    })
+  }, [pals, searchQuery, sortOption])
 
-  const filteredPals = allPals.filter(pal => {
-    const matchesSearch = pal.name.toLowerCase().includes(searchQuery.toLowerCase()) || pal.goals.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesActivity = activityFilter === "All" || pal.activity === activityFilter
-    const matchesDistance = distanceFilter === "Any" || 
-      (distanceFilter === "< 1 mile" && pal.distance < 1) ||
-      (distanceFilter === "< 5 miles" && pal.distance < 5) ||
-      (distanceFilter === "< 10 miles" && pal.distance < 10)
-    const matchesStyle = accountabilityFilter === "Any" || pal.style === accountabilityFilter
-    
-    return matchesSearch && matchesActivity && matchesDistance && matchesStyle
-  }).sort((a, b) => {
-    if (sortOption === "Best Match") return b.matchScore - a.matchScore;
-    if (sortOption === "Nearby") return a.distance - b.distance;
-    if (sortOption === "Same Schedule") return a.schedule === currentUser.schedule ? -1 : 1;
-    if (sortOption === "Same Goals") return b.matchScore - a.matchScore; // Simplified
-    return 0;
-  })
+  const [connectingId, setConnectingId] = useState<string | null>(null)
 
-  const handleConnect = async (id: number) => {
-    if (requested.includes(id)) {
-      // Logic to cancel request could go here
-      setRequested(requested.filter(r => r !== id))
-    } else {
-      await api.sendConnectionRequest(id)
-      setRequested([...requested, id])
-    }
+  const handleConnect = (id: string) => {
+    if (requested.has(id) || connect.isPending) return
+    setConnectingId(id)
+    connect.mutate(
+      { userId: id },
+      {
+        onSuccess: () => {
+          setRequested((prev) => {
+            const next = new Set(prev)
+            next.add(id)
+            return next
+          })
+          setConnectingId(null)
+        },
+        onError: () => {
+          setConnectingId(null)
+        },
+      },
+    )
   }
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-bg-base text-text-base">
         <Loader2 className="w-8 h-8 animate-spin text-accent" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-bg-base text-text-base">
+        <p className="text-sm text-red-500">Failed to load suggestions: {error.message}</p>
       </div>
     )
   }
@@ -135,50 +139,8 @@ export function Discover() {
               <DialogHeader>
                 <DialogTitle>Advanced Filters</DialogTitle>
               </DialogHeader>
-              <div className="space-y-6 py-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-medium text-text-muted">Activity Type</label>
-                  <div className="flex flex-wrap gap-2">
-                    {["All", "Running", "Yoga", "Cycling", "Gym"].map(type => (
-                      <button 
-                        key={type} 
-                        onClick={() => setActivityFilter(type)}
-                        className={`px-3 py-1.5 rounded-full text-[11px] font-medium border transition-colors ${activityFilter === type ? "bg-text-base text-bg-base border-text-base" : "bg-bg-surface border-border-base/50 text-text-muted hover:border-text-muted"}`}
-                      >
-                        {type}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-medium text-text-muted">Distance</label>
-                  <div className="flex flex-wrap gap-2">
-                    {["Any", "< 1 mile", "< 5 miles", "< 10 miles"].map(range => (
-                      <button 
-                        key={range} 
-                        onClick={() => setDistanceFilter(range)}
-                        className={`px-3 py-1.5 rounded-full text-[11px] font-medium border transition-colors ${distanceFilter === range ? "bg-text-base text-bg-base border-text-base" : "bg-bg-surface border-border-base/50 text-text-muted hover:border-text-muted"}`}
-                      >
-                        {range}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-medium text-text-muted">Accountability Style</label>
-                  <div className="flex flex-wrap gap-2">
-                    {["Any", "Gentle", "Structured", "Strict", "Competitive"].map(style => (
-                      <button 
-                        key={style} 
-                        onClick={() => setAccountabilityFilter(style)}
-                        className={`px-3 py-1.5 rounded-full text-[11px] font-medium border transition-colors ${accountabilityFilter === style ? "bg-text-base text-bg-base border-text-base" : "bg-bg-surface border-border-base/50 text-text-muted hover:border-text-muted"}`}
-                      >
-                        {style}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <Button className="w-full rounded-full h-11 text-sm font-medium mt-4">Apply Filters</Button>
+              <div className="py-6 text-center text-sm text-text-muted">
+                Activity, distance &amp; accountability filters are coming soon.
               </div>
             </DialogContent>
           </Dialog>
@@ -216,15 +178,11 @@ export function Discover() {
                           <AvatarImage src={pal.image} />
                           <AvatarFallback className="bg-bg-surface-hover text-text-muted font-medium text-sm">{pal.name[0]}</AvatarFallback>
                         </Avatar>
-                        {pal.online && (
-                          <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-accent border-2 border-bg-surface rounded-full shadow-sm" />
-                        )}
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <h3 className="font-semibold text-text-base text-base tracking-tight flex items-center gap-2">
+                          <h3 className="font-semibold text-text-base text-base tracking-tight">
                             {pal.name}
-                            {!pal.online && <span className="text-xs text-text-muted font-normal">{pal.lastActive}</span>}
                           </h3>
                           {pal.isPro && (
                             <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-white bg-gradient-to-r from-accent to-blue-500 px-1.5 py-0.5 rounded-full shadow-sm">
@@ -255,12 +213,17 @@ export function Discover() {
                   </ul>
 
                   <div className="flex gap-3 mt-auto">
-                    <Button 
+                    <Button
                       onClick={() => handleConnect(pal.id)}
-                      variant={requested.includes(pal.id) ? "outline" : "default"}
-                      className={`flex-1 rounded-full text-xs font-medium h-10 transition-all ${requested.includes(pal.id) ? 'border-accent/50 text-accent bg-accent/10' : ''}`}
+                      variant={requested.has(pal.id) ? "outline" : "default"}
+                      disabled={requested.has(pal.id) || connectingId === pal.id}
+                      className={`flex-1 rounded-full text-xs font-medium h-10 transition-all ${requested.has(pal.id) ? 'border-accent/50 text-accent bg-accent/10' : ''}`}
                     >
-                      {requested.includes(pal.id) ? <><Check className="w-4 h-4 mr-2" /> Requested</> : <><UserPlus className="w-4 h-4 mr-2" /> Connect</>}
+                      {requested.has(pal.id) ? (
+                        <><Check className="w-4 h-4 mr-2" /> Requested</>
+                      ) : (
+                        <><UserPlus className="w-4 h-4 mr-2" /> Connect</>
+                      )}
                     </Button>
                     <Link to={`/user/${pal.id}`} className="flex-1">
                       <Button variant="outline" className="w-full rounded-full text-xs font-medium h-10 border-border-base/50">View Profile</Button>

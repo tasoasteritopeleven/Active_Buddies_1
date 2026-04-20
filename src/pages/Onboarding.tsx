@@ -33,6 +33,18 @@ export function Onboarding() {
     setActivities(prev => prev.includes(activity) ? prev.filter(a => a !== activity) : [...prev, activity]);
   };
 
+  const [fitnessLevel, setFitnessLevel] = useState<string | null>(null);
+  const [schedule, setSchedule] = useState<Set<string>>(new Set());
+  const toggleSchedule = (slot: string) => {
+    setSchedule(prev => {
+      const next = new Set(prev);
+      if (next.has(slot)) next.delete(slot);
+      else next.add(slot);
+      return next;
+    });
+  };
+  const [locationPref, setLocationPref] = useState<string>("local");
+
   const currentStepLabel = () => {
     switch(step) {
       case 1: return "Welcome";
@@ -159,8 +171,11 @@ export function Onboarding() {
                   { level: "Intermediate", desc: "I work out somewhat regularly." },
                   { level: "Advanced", desc: "Fitness is a core part of my lifestyle." }
                 ].map((l, i) => (
-                  <label key={i} className="flex items-start gap-4 p-4 rounded-2xl border border-border-base/50 bg-bg-surface cursor-pointer hover:border-accent/40 transition-colors">
-                    <input type="radio" name="level" className="mt-1 w-4 h-4 text-accent focus:ring-accent" />
+                  <label key={i} onClick={() => setFitnessLevel(l.level)} className={cn(
+                    "flex items-start gap-4 p-4 rounded-2xl border-2 bg-bg-surface cursor-pointer transition-colors",
+                    fitnessLevel === l.level ? "border-accent bg-accent/5 shadow-sm" : "border-border-base/50 hover:border-accent/40"
+                  )}>
+                    <input type="radio" name="level" checked={fitnessLevel === l.level} onChange={() => setFitnessLevel(l.level)} className="mt-1 w-4 h-4 text-accent focus:ring-accent" />
                     <div>
                       <h3 className="font-semibold text-text-base">{l.level}</h3>
                       <p className="text-xs text-text-muted font-medium mt-1">{l.desc}</p>
@@ -182,11 +197,18 @@ export function Onboarding() {
                   <div key={dayType} className="space-y-2">
                     <h4 className="text-sm font-semibold text-text-base">{dayType}</h4>
                     <div className="grid grid-cols-3 gap-2">
-                      {["Morning", "Afternoon", "Evening"].map(time => (
-                        <button key={time} className="py-2.5 rounded-xl border border-border-base/50 bg-bg-surface text-xs font-medium text-text-muted hover:border-accent/50 focus:bg-accent/10 focus:border-accent focus:text-accent transition-colors">
-                          {time}
-                        </button>
-                      ))}
+                      {["Morning", "Afternoon", "Evening"].map(time => {
+                        const slot = `${dayType}-${time}`
+                        const selected = schedule.has(slot)
+                        return (
+                          <button key={time} onClick={() => toggleSchedule(slot)} className={cn(
+                            "py-2.5 rounded-xl border text-xs font-medium transition-colors",
+                            selected ? "bg-accent/10 border-accent text-accent" : "border-border-base/50 bg-bg-surface text-text-muted hover:border-accent/50"
+                          )}>
+                            {time}
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
                 ))}
@@ -201,36 +223,25 @@ export function Onboarding() {
                 <p className="text-sm text-text-muted font-medium">Where do you want to connect?</p>
               </div>
               <div className="grid grid-cols-1 gap-4">
-                <label className="flex items-start gap-4 p-5 rounded-2xl border-2 border-border-base/50 bg-bg-surface cursor-pointer hover:border-accent/40 transition-colors focus-within:border-accent focus-within:bg-accent/5">
-                  <input type="radio" name="location_pref" className="mt-1" defaultChecked />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <MapPin className="w-5 h-5 text-accent" />
-                      <h3 className="font-semibold text-text-base text-lg">Local Only</h3>
+                {[
+                  { value: "local", icon: <MapPin className="w-5 h-5 text-accent" />, title: "Local Only", desc: "I want pals I can meet in person at nearby gyms, parks, or groups." },
+                  { value: "remote", icon: <Activity className="w-5 h-5 text-accent" />, title: "Remote Only", desc: "I just want digital accountability. Location doesn't matter." },
+                  { value: "both", icon: <Target className="w-5 h-5 text-accent" />, title: "Both", desc: "I'm open to local meetups and remote cheerleaders." },
+                ].map(opt => (
+                  <label key={opt.value} onClick={() => setLocationPref(opt.value)} className={cn(
+                    "flex items-start gap-4 p-5 rounded-2xl border-2 bg-bg-surface cursor-pointer transition-colors",
+                    locationPref === opt.value ? "border-accent bg-accent/5 shadow-sm" : "border-border-base/50 hover:border-accent/40"
+                  )}>
+                    <input type="radio" name="location_pref" className="mt-1" checked={locationPref === opt.value} onChange={() => setLocationPref(opt.value)} />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        {opt.icon}
+                        <h3 className="font-semibold text-text-base text-lg">{opt.title}</h3>
+                      </div>
+                      <p className="text-sm text-text-muted font-medium">{opt.desc}</p>
                     </div>
-                    <p className="text-sm text-text-muted font-medium">I want pals I can meet in person at nearby gyms, parks, or groups.</p>
-                  </div>
-                </label>
-                <label className="flex items-start gap-4 p-5 rounded-2xl border-2 border-border-base/50 bg-bg-surface cursor-pointer hover:border-accent/40 transition-colors focus-within:border-accent focus-within:bg-accent/5">
-                  <input type="radio" name="location_pref" className="mt-1" />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Activity className="w-5 h-5 text-accent" />
-                      <h3 className="font-semibold text-text-base text-lg">Remote Only</h3>
-                    </div>
-                    <p className="text-sm text-text-muted font-medium">I just want digital accountability. Location doesn't matter.</p>
-                  </div>
-                </label>
-                <label className="flex items-start gap-4 p-5 rounded-2xl border-2 border-border-base/50 bg-bg-surface cursor-pointer hover:border-accent/40 transition-colors focus-within:border-accent focus-within:bg-accent/5">
-                  <input type="radio" name="location_pref" className="mt-1" />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Target className="w-5 h-5 text-accent" />
-                      <h3 className="font-semibold text-text-base text-lg">Both</h3>
-                    </div>
-                    <p className="text-sm text-text-muted font-medium">I'm open to local meetups and remote cheerleaders.</p>
-                  </div>
-                </label>
+                  </label>
+                ))}
               </div>
             </div>
           )}

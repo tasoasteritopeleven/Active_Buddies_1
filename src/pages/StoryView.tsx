@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { X, Loader2 } from "lucide-react"
+import { X } from "lucide-react"
 
 export function StoryView() {
   const { id } = useParams<{ id: string }>()
@@ -18,21 +18,24 @@ export function StoryView() {
   }
 
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval>
-    if (!isPaused) {
-      interval = setInterval(() => {
-        setProgress(p => {
-          if (p >= 100) {
-            clearInterval(interval)
-            navigate(-1) // go back when story finishes
-            return 100
-          }
-          return p + 2 // approx 5s for 100% (2% per 100ms)
-        })
-      }, 100)
-    }
+    if (isPaused) return
+    const interval = setInterval(() => {
+      setProgress(p => {
+        const next = p + 2 // approx 5s for 100% (2% per 100ms)
+        if (next >= 100) {
+          clearInterval(interval)
+          return 100
+        }
+        return next
+      })
+    }, 100)
     return () => clearInterval(interval)
-  }, [isPaused, navigate])
+  }, [isPaused])
+
+  // Navigate away once progress reaches 100 — kept outside the state updater
+  useEffect(() => {
+    if (progress >= 100) navigate(-1)
+  }, [progress, navigate])
 
   const handlePointerDown = () => setIsPaused(true)
   const handlePointerUp = () => setIsPaused(false)

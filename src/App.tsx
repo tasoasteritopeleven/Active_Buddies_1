@@ -22,6 +22,7 @@ import { SignUp } from "./pages/SignUp"
 import { Onboarding } from "./pages/Onboarding"
 import { StoryView } from "./pages/StoryView"
 import { AuthProvider, useAuth } from "./contexts/AuthContext"
+import { ErrorBoundary } from "./components/ErrorBoundary"
 
 function ProtectedRoute() {
   const { isAuthenticated, isOnboarded } = useAuth();
@@ -47,6 +48,7 @@ function OnboardingRoute() {
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <AuthProvider>
       <BrowserRouter>
         <Routes>
@@ -83,6 +85,7 @@ export default function App() {
         </Routes>
       </BrowserRouter>
     </AuthProvider>
+    </ErrorBoundary>
   )
 }
 

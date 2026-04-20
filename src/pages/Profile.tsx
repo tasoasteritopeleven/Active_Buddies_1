@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react"
-import { Settings, Award, Activity, Calendar, Flame, Dumbbell, Target, TrendingUp, Moon, Sun, MapPin, Clock, Users, Plus, Star, ShieldCheck, Loader2, Filter, ArrowUpDown } from "lucide-react"
+import { useState, useMemo } from "react"
+import { Settings, Award, Activity, Calendar, Flame, Dumbbell, Target, TrendingUp, Moon, Sun, MapPin, Users, Plus, Star, ShieldCheck, Loader2, Filter, ArrowUpDown } from "lucide-react"
 import { Link } from "react-router-dom"
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar"
 import { Button } from "../components/ui/button"
@@ -7,8 +7,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "../components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs"
 import { useTheme } from "../components/theme-provider"
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar, ComposedChart } from "recharts"
-import { api } from "../services/api"
+import { ResponsiveContainer, Line, XAxis, YAxis, CartesianGrid, Tooltip, Bar, ComposedChart } from "recharts"
+import { useMe, useUpdateMe } from "../lib/api"
 
 export function Profile() {
   const { theme, setTheme } = useTheme()
@@ -22,8 +22,50 @@ export function Profile() {
   const [durationFilter, setDurationFilter] = useState("All")
   const [calorieFilter, setCalorieFilter] = useState("All")
 
-  const [isLoading, setIsLoading] = useState(true)
-  const [profile, setProfile] = useState<any>(null)
+  // Real API hook for user profile
+  const { data: me, isLoading } = useMe()
+
+  // Merge real user data with mock enrichment for fields the backend doesn't have yet
+  const profile = useMemo(() => {
+    if (!me) return null
+    return {
+      name: [me.firstName, me.lastName].filter(Boolean).join(" ") || "User",
+      image: me.avatarUrl,
+      bio: me.bio || "No bio yet.",
+      location: me.locationCity || "Unknown",
+      fitnessLevel: me.fitnessLevel || "Intermediate",
+      isPro: me.isVerified,
+      // Mock enrichment — to be replaced when backend endpoints exist
+      username: `@${(me.firstName ?? "user").toLowerCase()}`,
+      joinDate: new Date(me.createdAt).toLocaleDateString("en", { month: "short", year: "numeric" }),
+      stats: { workouts: 142, streak: 12, level: "Pro", buddies: 8 },
+      activityStreak: [true, true, true, false, true, true, false],
+      interests: (me.goals ?? []).join(", ") || "Running, Yoga",
+      reliabilityScore: 96,
+      reviews: [
+        { id: 1, author: "Maria K.", rating: 5, text: "Great workout partner!", date: "2 weeks ago" },
+        { id: 2, author: "Nikos P.", rating: 5, text: "Consistent and motivating.", date: "1 month ago" },
+      ],
+    }
+  }, [me])
+
+  const updateMe = useUpdateMe()
+
+  // Local edit form state (decoupled from profile to avoid mutating query cache)
+  const [editForm, setEditForm] = useState<Record<string, string>>({})
+
+  const openEditModal = () => {
+    if (!profile) return
+    setEditForm({
+      image: profile.image ?? "",
+      name: profile.name,
+      username: profile.username,
+      location: profile.location,
+      bio: profile.bio,
+      interests: profile.interests,
+    })
+    setIsEditModalOpen(true)
+  }
 
   const [goals, setGoals] = useState([
     { id: 1, title: "Run a Half Marathon", current: 8, target: 13.1, unit: "miles", date: "2026-05-15", desc: "You are consistent! 8 out of 12 weeks of training plan completed.", type: "distance" },
@@ -71,21 +113,6 @@ export function Profile() {
       return historySortOrder === "asc" ? comparison : -comparison
     })
 
-  useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true)
-      try {
-        const data = await api.getProfile()
-        setProfile(data)
-      } catch (error) {
-        console.error("Failed to load profile", error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    loadData()
-  }, [])
-
   const progressData = [
     { name: 'Mon', workouts: 1, duration: 45, calories: 420 },
     { name: 'Tue', workouts: 1, duration: 30, calories: 250 },
@@ -101,16 +128,18 @@ export function Profile() {
     { id: 2, title: "Core Crusher", buddies: ["Emma"], progress: 20, weeks: 2, cost: "Paid" },
   ]
 
-  const handleSaveProfile = async () => {
-    try {
-      setIsLoading(true)
-      // Attempt to save to API if endpoint exists, otherwise simulate
-      setIsEditModalOpen(false)
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setIsLoading(false)
-    }
+  const handleSaveProfile = () => {
+    const names = (editForm.name ?? "").trim().split(" ")
+    updateMe.mutate({
+      firstName: names[0] || undefined,
+      lastName: names.slice(1).join(" ") || undefined,
+      avatarUrl: editForm.image || undefined,
+      bio: editForm.bio || undefined,
+      locationCity: editForm.location || undefined,
+      goals: (editForm.interests ?? "").split(",").map(s => s.trim()).filter(Boolean),
+    }, {
+      onSuccess: () => setIsEditModalOpen(false),
+    })
   }
 
   if (isLoading || !profile) {
@@ -217,7 +246,7 @@ export function Profile() {
 
         <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
           <DialogTrigger asChild>
-            <Button variant="outline" className="w-full rounded-full text-xs font-medium">
+            <Button variant="outline" className="w-full rounded-full text-xs font-medium" onClick={openEditModal}>
               Edit Profile
             </Button>
           </DialogTrigger>
@@ -229,29 +258,29 @@ export function Profile() {
               <div className="space-y-2">
                 <label className="text-xs font-medium text-text-muted">Profile Picture URL</label>
                 <Input 
-                  value={profile.image} 
-                  onChange={(e) => setProfile({...profile, image: e.target.value})} 
+                  value={editForm.image ?? ""} 
+                  onChange={(e) => setEditForm(prev => ({...prev, image: e.target.value}))} 
                 />
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-medium text-text-muted">Name</label>
                 <Input 
-                  value={profile.name} 
-                  onChange={(e) => setProfile({...profile, name: e.target.value})} 
+                  value={editForm.name ?? ""} 
+                  onChange={(e) => setEditForm(prev => ({...prev, name: e.target.value}))} 
                 />
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-medium text-text-muted">Username</label>
                 <Input 
-                  value={profile.username} 
-                  onChange={(e) => setProfile({...profile, username: e.target.value})} 
+                  value={editForm.username ?? ""} 
+                  onChange={(e) => setEditForm(prev => ({...prev, username: e.target.value}))} 
                 />
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-medium text-text-muted">Location</label>
                 <Input 
-                  value={profile.location} 
-                  onChange={(e) => setProfile({...profile, location: e.target.value})} 
+                  value={editForm.location ?? ""} 
+                  onChange={(e) => setEditForm(prev => ({...prev, location: e.target.value}))} 
                 />
               </div>
               <div className="space-y-2">
@@ -259,15 +288,15 @@ export function Profile() {
                 <textarea 
                   className="w-full p-3 border border-border-base bg-bg-surface text-text-base rounded-2xl focus:outline-none focus:ring-2 focus:ring-accent/50 text-sm placeholder:text-text-muted transition-all"
                   rows={3}
-                  value={profile.bio}
-                  onChange={(e) => setProfile({...profile, bio: e.target.value})}
+                  value={editForm.bio ?? ""}
+                  onChange={(e) => setEditForm(prev => ({...prev, bio: e.target.value}))}
                 />
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-medium text-text-muted">Interests (comma separated)</label>
                 <Input 
-                  value={profile.interests} 
-                  onChange={(e) => setProfile({...profile, interests: e.target.value})} 
+                  value={editForm.interests ?? ""} 
+                  onChange={(e) => setEditForm(prev => ({...prev, interests: e.target.value}))} 
                 />
               </div>
               <Button className="w-full mt-4 rounded-full text-xs font-medium" onClick={handleSaveProfile}>
@@ -483,14 +512,15 @@ export function Profile() {
                                   <div className="flex gap-2 mt-4">
                                     <Button variant="outline" className="w-full rounded-full h-11 text-sm font-medium border-red-500/50 text-red-500 hover:bg-red-500/10" 
                                       onClick={() => {
-                                        setGoals(goals.filter(g => g.id !== goal.id))
+                                        setGoals(prev => prev.filter(g => g.id !== goal.id))
                                         setEditingGoal(null)
                                       }}>
                                       Delete Goal
                                     </Button>
                                     <Button className="w-full rounded-full h-11 text-sm font-medium" 
                                       onClick={() => {
-                                        setGoals(goals.map(g => g.id === editingGoal.id ? editingGoal : g))
+                                        if (!editingGoal) return
+                                        setGoals(prev => prev.map(g => g.id === editingGoal.id ? editingGoal : g))
                                         setEditingGoal(null)
                                       }}>
                                       Save Changes

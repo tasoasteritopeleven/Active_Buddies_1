@@ -45,6 +45,7 @@ export function Settings() {
   }, [])
 
   const handleToggle = async (key: keyof typeof settings) => {
+    const oldSettings = settings
     const newSettings = { ...settings, [key]: !settings[key] }
     setSettings(newSettings)
     // In a real app, we might debounce this or save on unmount
@@ -53,7 +54,7 @@ export function Settings() {
     } catch (error) {
       console.error("Failed to update settings", error)
       // Revert on failure
-      setSettings(settings)
+      setSettings(oldSettings)
     }
   }
 
@@ -68,9 +69,9 @@ export function Settings() {
     }
   }
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setIsLogoutOpen(false)
-    logout()
+    await logout()
     navigate("/login")
   }
 
@@ -161,7 +162,7 @@ export function Settings() {
                 onClick={() => handleToggle('notificationsEnabled')}
                 className={`w-10 h-5 rounded-full transition-colors relative ${settings.notificationsEnabled ? 'bg-accent' : 'bg-bg-surface-hover border border-border-base/50'}`}
               >
-                <div className={`w-4 h-4 rounded-full bg-bg-surface absolute top-0.5 transition-transform shadow-sm ${settings.notificationsEnabled ? 'translate-x-5.5' : 'translate-x-0.5'}`} />
+                <div className={`w-4 h-4 rounded-full bg-bg-surface absolute top-0.5 transition-transform shadow-sm ${settings.notificationsEnabled ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
               </button>
             </div>
 
@@ -176,7 +177,7 @@ export function Settings() {
                     onClick={() => handleToggle('notifyFriendActivity')}
                     className={`w-10 h-5 rounded-full transition-colors relative ${settings.notifyFriendActivity ? 'bg-accent' : 'bg-bg-surface-hover border border-border-base/50'}`}
                   >
-                    <div className={`w-4 h-4 rounded-full bg-bg-surface absolute top-0.5 transition-transform shadow-sm ${settings.notifyFriendActivity ? 'translate-x-5.5' : 'translate-x-0.5'}`} />
+                    <div className={`w-4 h-4 rounded-full bg-bg-surface absolute top-0.5 transition-transform shadow-sm ${settings.notifyFriendActivity ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
                   </button>
                 </div>
                 <div className="flex items-center justify-between">
@@ -188,7 +189,7 @@ export function Settings() {
                     onClick={() => handleToggle('notifyChallenges')}
                     className={`w-10 h-5 rounded-full transition-colors relative ${settings.notifyChallenges ? 'bg-accent' : 'bg-bg-surface-hover border border-border-base/50'}`}
                   >
-                    <div className={`w-4 h-4 rounded-full bg-bg-surface absolute top-0.5 transition-transform shadow-sm ${settings.notifyChallenges ? 'translate-x-5.5' : 'translate-x-0.5'}`} />
+                    <div className={`w-4 h-4 rounded-full bg-bg-surface absolute top-0.5 transition-transform shadow-sm ${settings.notifyChallenges ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
                   </button>
                 </div>
                 <div className="flex items-center justify-between">
@@ -200,7 +201,7 @@ export function Settings() {
                     onClick={() => handleToggle('notifyCommunity')}
                     className={`w-10 h-5 rounded-full transition-colors relative ${settings.notifyCommunity ? 'bg-accent' : 'bg-bg-surface-hover border border-border-base/50'}`}
                   >
-                    <div className={`w-4 h-4 rounded-full bg-bg-surface absolute top-0.5 transition-transform shadow-sm ${settings.notifyCommunity ? 'translate-x-5.5' : 'translate-x-0.5'}`} />
+                    <div className={`w-4 h-4 rounded-full bg-bg-surface absolute top-0.5 transition-transform shadow-sm ${settings.notifyCommunity ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
                   </button>
                 </div>
                 <div className="flex items-center justify-between">
@@ -212,7 +213,7 @@ export function Settings() {
                     onClick={() => handleToggle('dailySummary')}
                     className={`w-10 h-5 rounded-full transition-colors relative ${settings.dailySummary ? 'bg-accent' : 'bg-bg-surface-hover border border-border-base/50'}`}
                   >
-                    <div className={`w-4 h-4 rounded-full bg-bg-surface absolute top-0.5 transition-transform shadow-sm ${settings.dailySummary ? 'translate-x-5.5' : 'translate-x-0.5'}`} />
+                    <div className={`w-4 h-4 rounded-full bg-bg-surface absolute top-0.5 transition-transform shadow-sm ${settings.dailySummary ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
                   </button>
                 </div>
                 <div className="flex items-center justify-between">
@@ -224,7 +225,7 @@ export function Settings() {
                     onClick={() => handleToggle('goalReminders')}
                     className={`w-10 h-5 rounded-full transition-colors relative ${settings.goalReminders ? 'bg-accent' : 'bg-bg-surface-hover border border-border-base/50'}`}
                   >
-                    <div className={`w-4 h-4 rounded-full bg-bg-surface absolute top-0.5 transition-transform shadow-sm ${settings.goalReminders ? 'translate-x-5.5' : 'translate-x-0.5'}`} />
+                    <div className={`w-4 h-4 rounded-full bg-bg-surface absolute top-0.5 transition-transform shadow-sm ${settings.goalReminders ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
                   </button>
                 </div>
               </div>
@@ -249,7 +250,7 @@ export function Settings() {
                 onClick={() => handleToggle('privateProfile')}
                 className={`w-10 h-5 rounded-full transition-colors relative ${settings.privateProfile ? 'bg-accent' : 'bg-bg-surface-hover border border-border-base/50'}`}
               >
-                <div className={`w-4 h-4 rounded-full bg-bg-surface absolute top-0.5 transition-transform shadow-sm ${settings.privateProfile ? 'translate-x-5.5' : 'translate-x-0.5'}`} />
+                <div className={`w-4 h-4 rounded-full bg-bg-surface absolute top-0.5 transition-transform shadow-sm ${settings.privateProfile ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
               </button>
             </div>
             <div className="p-4 flex items-center justify-between">
@@ -266,7 +267,7 @@ export function Settings() {
                 onClick={() => handleToggle('allowMessages')}
                 className={`w-10 h-5 rounded-full transition-colors relative ${settings.allowMessages ? 'bg-accent' : 'bg-bg-surface-hover border border-border-base/50'}`}
               >
-                <div className={`w-4 h-4 rounded-full bg-bg-surface absolute top-0.5 transition-transform shadow-sm ${settings.allowMessages ? 'translate-x-5.5' : 'translate-x-0.5'}`} />
+                <div className={`w-4 h-4 rounded-full bg-bg-surface absolute top-0.5 transition-transform shadow-sm ${settings.allowMessages ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
               </button>
             </div>
           </div>
@@ -289,7 +290,7 @@ export function Settings() {
                 onClick={() => handleToggle('isPro')}
                 className={`w-10 h-5 rounded-full transition-colors relative ${settings.isPro ? 'bg-accent' : 'bg-bg-surface-hover border border-border-base/50'}`}
               >
-                <div className={`w-4 h-4 rounded-full bg-bg-surface absolute top-0.5 transition-transform shadow-sm ${settings.isPro ? 'translate-x-5.5' : 'translate-x-0.5'}`} />
+                <div className={`w-4 h-4 rounded-full bg-bg-surface absolute top-0.5 transition-transform shadow-sm ${settings.isPro ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
               </button>
             </div>
             {settings.isPro && (

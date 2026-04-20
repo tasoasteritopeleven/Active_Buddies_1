@@ -1,43 +1,58 @@
-import { useState, useEffect } from "react"
+import { useState, useMemo } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { ArrowLeft, Award, Activity, Calendar, Flame, Dumbbell, Target, TrendingUp, MapPin, Clock, UserPlus, Check, ShieldCheck, Star, AlertTriangle, Loader2 } from "lucide-react"
+import { ArrowLeft, Award, Activity, Flame, Target, TrendingUp, MapPin, Clock, UserPlus, Check, ShieldCheck, Star, AlertTriangle, Loader2 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar"
 import { Button } from "../components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../components/ui/dropdown-menu"
 import { MoreVertical } from "lucide-react"
-import { api } from "../services/api"
+import { useUser, useSendConnectionRequest } from "../lib/api"
+import type { PublicUser } from "../lib/api"
+
+// Mock data for fields the backend doesn't provide yet
+const MOCK_ENRICHMENT = {
+  online: true,
+  isPro: false,
+  username: "@user",
+  schedule: "Mornings",
+  stats: { workouts: 142, streak: 12, level: "Pro" },
+  reliabilityScore: 96,
+  reviews: [
+    { id: 1, author: "Maria K.", rating: 5, date: "2 weeks ago", text: "Amazing workout partner! Always on time and motivating." },
+    { id: 2, author: "Nikos P.", rating: 5, date: "1 month ago", text: "Great energy, pushes you to give your best." },
+  ],
+}
 
 export function PalProfile() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [requested, setRequested] = useState(false)
-  
-  const [isLoading, setIsLoading] = useState(true)
-  const [pal, setPal] = useState<any>(null)
 
-  useEffect(() => {
-    const loadData = async () => {
-      if (!id) return;
-      setIsLoading(true)
-      try {
-        const data = await api.getPalProfile(Number(id))
-        setPal(data)
-      } catch (error) {
-        console.error("Failed to load pal profile", error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    loadData()
-  }, [id])
+  // Real API hooks
+  const { data: userData, isLoading } = useUser(id)
+  const sendRequest = useSendConnectionRequest()
 
-  const handleConnect = async () => {
-    if (!pal) return;
-    if (!requested) {
-      await api.sendConnectionRequest(pal.id)
+  // Merge real user data with mock enrichment for fields the backend doesn't have
+  const pal = useMemo(() => {
+    if (!userData) return null
+    return {
+      id: userData.id,
+      name: [userData.firstName, userData.lastName].filter(Boolean).join(" ") || "Unknown",
+      image: userData.avatarUrl,
+      bio: userData.bio || "No bio yet.",
+      location: userData.locationCity || "Unknown",
+      goals: (userData.goals ?? []).join(", ") || "Staying active",
+      ...MOCK_ENRICHMENT,
+      username: `@${(userData.firstName ?? "user").toLowerCase()}`,
+      isPro: userData.isVerified,
     }
-    setRequested(!requested)
+  }, [userData])
+
+  const handleConnect = () => {
+    if (!pal || requested || sendRequest.isPending) return
+    sendRequest.mutate(
+      { userId: pal.id },
+      { onSuccess: () => setRequested(true) }
+    )
   }
 
   if (isLoading || !pal) {

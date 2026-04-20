@@ -8,14 +8,22 @@ import { Activity } from "lucide-react";
 export function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const { login } = useAuth();
+  const [submitting, setSubmitting] = useState(false);
+  const { login, error, clearError } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (email && password) {
-      login(email);
+    if (!email || !password || submitting) return;
+    setSubmitting(true);
+    clearError();
+    try {
+      await login(email, password);
       navigate("/");
+    } catch {
+      // `error` from context is already populated; keep the user on the form
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -53,7 +61,16 @@ export function Login() {
               required
             />
           </div>
-          <Button type="submit" className="w-full h-11 rounded-full font-medium">Log In</Button>
+          {error && (
+            <p className="text-xs text-red-500 text-center" role="alert">{error}</p>
+          )}
+          <Button
+            type="submit"
+            className="w-full h-11 rounded-full font-medium"
+            disabled={submitting}
+          >
+            {submitting ? "Logging in..." : "Log In"}
+          </Button>
         </form>
 
         <div className="relative">
@@ -65,7 +82,13 @@ export function Login() {
           </div>
         </div>
 
-        <Button variant="outline" className="w-full h-11 rounded-full font-medium" onClick={() => login("demo@google.com")}>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full h-11 rounded-full font-medium"
+          disabled
+          title="Google sign-in coming soon"
+        >
           <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
             <path
               fill="currentColor"

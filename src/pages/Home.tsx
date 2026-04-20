@@ -1,39 +1,43 @@
-import { Bell, Flame, CheckCircle2, Trophy, Users, MapPin, Calendar as CalendarIcon, Search, SlidersHorizontal, Heart, MessageSquare, Share2, Plus, Activity, X, Loader2, Clock } from "lucide-react"
+import { Flame, CheckCircle2, Trophy, Users, MapPin, Calendar as CalendarIcon, Search, SlidersHorizontal, Heart, MessageSquare, Share2, Plus, Activity, X, Loader2, Clock } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar"
 import { ScrollArea, ScrollBar } from "../components/ui/scroll-area"
 import { Link } from "react-router-dom"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { api } from "../services/api"
+import { useMe, useConnections, useChallenges } from "../lib/api"
+import type { Connection, Challenge } from "../lib/api"
 
 import { motion } from "motion/react"
+import { useAuth } from "../contexts/AuthContext"
 
 export function Home() {
+  const { user } = useAuth()
   const [checkedIn, setCheckedIn] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false)
   const [isLogWorkoutOpen, setIsLogWorkoutOpen] = useState(false)
   const [buddyCheckedIn, setBuddyCheckedIn] = useState(false)
 
-  const [isLoading, setIsLoading] = useState(true)
-  const [pals, setPals] = useState<any[]>([])
-  const [challenges, setChallenges] = useState<any[]>([])
+  // --- Real API hooks (backend-supported) ---
+  const { data: me } = useMe()
+  const { data: connections } = useConnections()
+  const { data: challengesData } = useChallenges({ status: "active", limit: 5 })
+
+  // --- Mock data for features without backend endpoints yet ---
   const [meetups, setMeetups] = useState<any[]>([])
-  const [notifications, setNotifications] = useState<any[]>([])
   const [feed, setFeed] = useState<any[]>([])
   const [stories, setStories] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const loadData = async () => {
+    const loadMockData = async () => {
       setIsLoading(true)
       try {
         const data = await api.getHomeData()
-        setPals(data.pals)
-        setChallenges(data.challenges)
         setMeetups(data.meetups)
-        setNotifications(data.notifications)
         setFeed(data.feed)
         setStories(data.stories)
       } catch (error) {
@@ -42,8 +46,40 @@ export function Home() {
         setIsLoading(false)
       }
     }
-    loadData()
+    loadMockData()
   }, [])
+
+  // Transform real connections into pal view for the "My Pals" section
+  const pals = useMemo(() => {
+    if (!connections || !me) return []
+    return connections.map((conn: Connection) => {
+      const peerId = conn.requesterId === me.id ? conn.addresseeId : conn.requesterId
+      return {
+        id: peerId,
+        name: peerId.slice(0, 8), // Fallback — real app would join user data
+        image: `https://i.pravatar.cc/150?u=${peerId}`,
+      }
+    })
+  }, [connections, me])
+
+  // Transform real challenges
+  const challenges = useMemo(() => {
+    const items = challengesData?.items ?? []
+    return items.map((c: Challenge) => {
+      const start = new Date(c.startDate).getTime()
+      const end = new Date(c.endDate).getTime()
+      const now = Date.now()
+      const daysLeft = Math.max(0, Math.ceil((end - now) / (1000 * 60 * 60 * 24)))
+      const progress = Math.min(100, Math.round(((now - start) / (end - start)) * 100))
+      return {
+        id: c.id,
+        title: c.title,
+        participants: c.participantsCount,
+        daysLeft,
+        progress,
+      }
+    })
+  }, [challengesData])
 
   const handleCheckIn = async () => {
     await api.checkIn()
@@ -71,12 +107,14 @@ export function Home() {
 
   const Highlight = ({ text, highlight }: { text: string, highlight: string }) => {
     if (!highlight.trim()) return <>{text}</>;
-    const regex = new RegExp(`(${highlight})`, 'gi');
+    const escaped = highlight.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(`(${escaped})`, 'gi');
     const parts = text.split(regex);
+    const lower = highlight.toLowerCase();
     return (
       <>
         {parts.map((part, i) => 
-          regex.test(part) ? <span key={i} className="bg-accent/30 text-accent rounded-sm px-0.5">{part}</span> : <span key={i}>{part}</span>
+          part.toLowerCase() === lower ? <span key={i} className="bg-accent/30 text-accent rounded-sm px-0.5">{part}</span> : <span key={i}>{part}</span>
         )}
       </>
     );
@@ -95,7 +133,7 @@ export function Home() {
       <div className="max-w-[1600px] mx-auto">
         <header className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-lg font-semibold tracking-tight mb-0.5">Good morning, <span className="text-accent">Alex</span></h1>
+            <h1 className="text-lg font-semibold tracking-tight mb-0.5">Good morning, <span className="text-accent">{user?.firstName ?? user?.name ?? "there"}</span></h1>
             <p className="text-xs text-text-muted font-medium">Ready to crush your goals today?</p>
           </div>
         </header>

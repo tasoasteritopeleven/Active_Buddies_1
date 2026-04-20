@@ -9,14 +9,27 @@ export function SignUp() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const { signup } = useAuth();
+  const [submitting, setSubmitting] = useState(false);
+  const { signup, error, clearError } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (email && password && name) {
-      signup(email, name);
+    if (!email || !password || !name || submitting) return;
+    setSubmitting(true);
+    clearError();
+    try {
+      // Split "First Last" into first + last (last is optional)
+      const trimmed = name.trim();
+      const spaceIdx = trimmed.indexOf(" ");
+      const firstName = spaceIdx === -1 ? trimmed : trimmed.slice(0, spaceIdx);
+      const lastName = spaceIdx === -1 ? undefined : trimmed.slice(spaceIdx + 1).trim() || undefined;
+      await signup(email, password, firstName, lastName);
       navigate("/onboarding");
+    } catch {
+      // error message already surfaced by context
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -65,7 +78,16 @@ export function SignUp() {
               required
             />
           </div>
-          <Button type="submit" className="w-full h-11 rounded-full font-medium">Create Account</Button>
+          {error && (
+            <p className="text-xs text-red-500 text-center" role="alert">{error}</p>
+          )}
+          <Button
+            type="submit"
+            className="w-full h-11 rounded-full font-medium"
+            disabled={submitting}
+          >
+            {submitting ? "Creating..." : "Create Account"}
+          </Button>
         </form>
 
         <p className="text-center text-xs text-text-muted">
